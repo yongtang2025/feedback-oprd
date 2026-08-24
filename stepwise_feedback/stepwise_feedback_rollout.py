@@ -18,6 +18,7 @@ from typing import Dict, List
 
 import numpy as np
 import torch
+from omegaconf import open_dict
 
 import verl.utils.torch_functional as verl_F
 from agent_system.environments import EnvironmentManagerBase
@@ -71,12 +72,13 @@ When judging executability, compare the proposed action by exact string match ag
 Plausible ALFWorld commands that are not written verbatim in Actions are not executable.
 If the proposed action is not an exact string match in Actions, treat that as a mistake.
 The action hint should guide the student where to focus, but should not decide the final action for the student.
+If Mistake is "None.", set Action hint to "None." because the proposed action should normally be kept.
 Keep each field to one short sentence.
 
 Output exactly this format:
 Mistake: <the main issue, or "None." only when the proposed action exactly matches Actions and is appropriate>
 Reason: <whether the proposed action exactly matches Actions, and whether it fits the current observation>
-Action hint: <a high-level hint for choosing from the current admissible actions, not a full action command>
+Action hint: <"None." when Mistake is "None."; otherwise a high-level hint for choosing from the current admissible actions, not a full action command>
 """
 
 
@@ -98,6 +100,7 @@ Teacher feedback:
 Now it's your turn to take an action.
 You should first reason step-by-step about the current situation, using the teacher feedback to correct mistakes in your previous response while preserving useful reasoning when appropriate.
 Your final action must be copied exactly from Actions; do not invent, paraphrase, or add objects/prepositions.
+If the teacher says Mistake: None., normally keep the previous action unless the feedback gives a clear current-step reason to change it.
 If the teacher says your previous action does not exactly match Actions, choose another action from Actions.
 Once you've finished your reasoning, you should choose an admissible action for current step and present it within <action> </action> tags.
 """
@@ -127,17 +130,29 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
             "Your admissible actions of the current situation are:",
             ["\n\nNow it's your turn", "\nNow it's your turn"],
         ).strip()
+        # Keep the original ALFWorld wording for the decision-critical fields.
+        # Only the generic response-format instructions are omitted because the
+        # teacher/refinement templates provide their own instructions.
+        context_lines = [
+            "You are an expert agent operating in the ALFRED Embodied Environment."
+        ]
         if task_description:
-            task_line = f"Task: {task_description}"
-        else:
-            task_line = ""
-        history_line = f"Recent history: {recent_history}" if recent_history else ""
+            context_lines.append(f"Your task is to: {task_description}")
+        if recent_history:
+            context_lines.append(
+                "Below are the most recent observations and the corresponding "
+                f"actions you took: {recent_history}"
+            )
         if current_step_line:
-            obs_line = current_step_line
-        else:
-            obs_line = f"Observation: {current_observation}" if current_observation else ""
-        actions_line = f"Actions: {admissible_actions}" if admissible_actions else ""
-        return "\n".join(line for line in [task_line, history_line, obs_line, actions_line] if line)
+            context_lines.append(current_step_line)
+        elif current_observation:
+            context_lines.append(f"Your current observation is: {current_observation}")
+        if admissible_actions:
+            context_lines.append(
+                "Your admissible actions of the current situation are: "
+                f"{admissible_actions}"
+            )
+        return "\n".join(context_lines)
 
     def _debug_log(self, message: str) -> None:
         feedback_cfg = self.config.algorithm.sod.get("stepwise_feedback", {})
@@ -398,13 +413,24 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
                 meta["response_length"] = response_length
         return meta
 
+    @staticmethod
+    def _optional_positive_int(value):
+        if value is None:
+            return None
+        value = int(value)
+        return value if value > 0 else None
+
     def _make_prompt_batch(
         self,
         prompt_texts: List[str],
         *,
         data_sources: np.ndarray | List[object],
         meta_info: Dict,
+        max_prompt_length=None,
     ) -> DataProto:
+        prompt_limit = self._optional_positive_int(max_prompt_length)
+        if prompt_limit is None:
+            prompt_limit = int(self.config.data.max_prompt_length)
         apply_chat_template_kwargs = self.config.data.get("apply_chat_template_kwargs", {})
         processed_samples = []
         for item, prompt_text in enumerate(prompt_texts):
@@ -418,7 +444,7 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
             input_ids, attention_mask = verl_F.tokenize_and_postprocess_data(
                 prompt=prompt_with_chat_template,
                 tokenizer=self.tokenizer,
-                max_length=self.config.data.max_prompt_length,
+                max_length=prompt_limit,
                 pad_token_id=self.tokenizer.pad_token_id,
                 left_pad=True,
                 truncation=self.config.data.truncation,
@@ -427,19 +453,19 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
                 prompt_with_chat_template,
                 add_special_tokens=False,
             )
-            if len(raw_prompt_ids) > self.config.data.max_prompt_length:
+            if len(raw_prompt_ids) > prompt_limit:
                 if self.config.data.truncation == "left":
-                    raw_prompt_ids = raw_prompt_ids[-self.config.data.max_prompt_length :]
+                    raw_prompt_ids = raw_prompt_ids[-prompt_limit:]
                 elif self.config.data.truncation == "right":
-                    raw_prompt_ids = raw_prompt_ids[: self.config.data.max_prompt_length]
+                    raw_prompt_ids = raw_prompt_ids[:prompt_limit]
                 elif self.config.data.truncation == "middle":
-                    left_half = self.config.data.max_prompt_length // 2
-                    right_half = self.config.data.max_prompt_length - left_half
+                    left_half = prompt_limit // 2
+                    right_half = prompt_limit - left_half
                     raw_prompt_ids = raw_prompt_ids[:left_half] + raw_prompt_ids[-right_half:]
                 elif self.config.data.truncation == "error":
                     raise RuntimeError(
                         f"Prompt length {len(raw_prompt_ids)} is longer than "
-                        f"{self.config.data.max_prompt_length}."
+                        f"{prompt_limit}."
                     )
 
             row = {
@@ -560,6 +586,15 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
         tool_callings = np.zeros(batch_size, dtype=np.float32)
         feedback_cfg = self.config.algorithm.sod.get("stepwise_feedback", {})
         student_max_tokens = feedback_cfg.get("student_max_tokens", None)
+        original_prompt_limit = self._optional_positive_int(
+            feedback_cfg.get("original_student_max_prompt_length", None)
+        )
+        teacher_prompt_limit = self._optional_positive_int(
+            feedback_cfg.get("teacher_feedback_max_prompt_length", None)
+        )
+        regeneration_prompt_limit = self._optional_positive_int(
+            feedback_cfg.get("regeneration_max_prompt_length", None)
+        )
         student_generation_meta = self._meta_with_optional_response_length(
             gen_batch.meta_info,
             student_max_tokens,
@@ -572,7 +607,10 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
             self._debug_log(
                 "limits "
                 f"student_max_tokens={student_max_tokens} "
-                f"teacher_max_tokens={feedback_cfg.get('teacher_max_tokens', 192)}"
+                f"teacher_max_tokens={feedback_cfg.get('teacher_max_tokens', 192)} "
+                f"original_prompt_limit={original_prompt_limit or self.config.data.max_prompt_length} "
+                f"teacher_prompt_limit={teacher_prompt_limit or self.config.data.max_prompt_length} "
+                f"regeneration_prompt_limit={regeneration_prompt_limit or self.config.data.max_prompt_length}"
             )
             for _step in range(self.config.env.max_steps):
                 active_masks = np.logical_not(is_done)
@@ -591,6 +629,7 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
                     current_step_prompts,
                     data_sources=data_sources,
                     meta_info=gen_batch.meta_info,
+                    max_prompt_length=original_prompt_limit,
                 )
                 original_input = original_prompt_batch.pop(
                     batch_keys=["input_ids", "attention_mask", "position_ids"],
@@ -631,6 +670,7 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
                         "top_k": int(feedback_cfg.get("teacher_top_k", -1)),
                         "do_sample": bool(feedback_cfg.get("teacher_do_sample", True)),
                     },
+                    max_prompt_length=teacher_prompt_limit,
                 )
                 teacher_input = teacher_prompt_batch.pop(
                     batch_keys=["input_ids", "attention_mask", "position_ids"],
@@ -665,6 +705,7 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
                     ),
                     data_sources=data_sources,
                     meta_info=gen_batch.meta_info,
+                    max_prompt_length=regeneration_prompt_limit,
                 )
                 regen_input = regeneration_prompt_batch.pop(
                     batch_keys=["input_ids", "attention_mask", "position_ids"],
@@ -880,13 +921,34 @@ class StepwiseFeedbackTrajectoryCollector(TrajectoryCollector):
         ref_policy_wg=None,
     ) -> DataProto:
         if not is_train:
-            self._debug_log("mode=eval_student_only")
-            return super().multi_turn_loop(
-                gen_batch=gen_batch,
-                actor_rollout_wg=actor_rollout_wg,
-                envs=envs,
-                is_train=is_train,
+            feedback_cfg = self.config.algorithm.sod.get("stepwise_feedback", {})
+            eval_prompt_limit = self._optional_positive_int(
+                feedback_cfg.get("eval_student_max_prompt_length", None)
             )
+            self._debug_log(
+                f"mode=eval_student_only prompt_limit={eval_prompt_limit or self.config.data.max_prompt_length}"
+            )
+            if eval_prompt_limit is None or eval_prompt_limit == int(self.config.data.max_prompt_length):
+                return super().multi_turn_loop(
+                    gen_batch=gen_batch,
+                    actor_rollout_wg=actor_rollout_wg,
+                    envs=envs,
+                    is_train=is_train,
+                )
+
+            original_max_prompt_length = self.config.data.max_prompt_length
+            with open_dict(self.config.data):
+                self.config.data.max_prompt_length = eval_prompt_limit
+            try:
+                return super().multi_turn_loop(
+                    gen_batch=gen_batch,
+                    actor_rollout_wg=actor_rollout_wg,
+                    envs=envs,
+                    is_train=is_train,
+                )
+            finally:
+                with open_dict(self.config.data):
+                    self.config.data.max_prompt_length = original_max_prompt_length
         if ref_policy_wg is None:
             raise ValueError("StepwiseFeedbackTrajectoryCollector requires ref_policy_wg for teacher feedback.")
 
