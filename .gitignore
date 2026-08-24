@@ -1,31 +1,42 @@
-# Experiment outputs
-logs/
-results/
-outputs/
+# python缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 模型权重、checkpoint
+*.bin
+*.safetensors
+*.pt
+*.pth
 checkpoints/
-runs/
-*.tar.gz
-wandb/
-swanlab/
+ckpt/
+models/
+weights/
+
+# 日志输出
+logs/
 *.log
+outputs/
+runs/
+
+# conda、环境
+env/
+venv/
+.venv/
+*.yml
+environment.yml
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# hpc临时文件
 *.out
 *.err
 
-# Large generated artifacts
-*.pt
-!artifacts/
-!artifacts/bridge_bank/
-!artifacts/bridge_bank/*.pt
-*.pth
-*.safetensors
-*.bin
-*.csv
-*.png
-*.pdf
-
-# Python and editor artifacts
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ipynb_checkpoints/
-.DS_Store
+# wandb 实验日志
+wandb/
+*.wandb
