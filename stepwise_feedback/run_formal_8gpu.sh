@@ -75,6 +75,8 @@ PY
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 export OMP_NUM_THREADS=1
+export WANDB_MODE="${WANDB_MODE:-online}"
+unset WANDB_DISABLED
 
 num_cpus_per_env_worker=0.1
 
@@ -106,12 +108,19 @@ train_data_size=16
 val_data_size=128
 group_size=8
 experiment_name="oprd_stepwise_feedback_alfworld_qwen3_ts1.7b_t8b_${sod_mode}_only_coef${opd_coef}"
+RESUME_MODE="${RESUME_MODE:-disable}"
 export ALFWORLD_DATA=$HOME/data/alfworld
 export HF_ENDPOINT=https://hf-mirror.com
 
 set +x
 export WANDB_API_KEY="${WANDB_API_KEY:-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}"
 set -x
+echo "WANDB_MODE=$WANDB_MODE"
+python - <<'PY'
+import os
+print("WANDB_API_KEY set:", bool(os.environ.get("WANDB_API_KEY")))
+print("WANDB_DISABLED:", os.environ.get("WANDB_DISABLED"))
+PY
 
 python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     algorithm.adv_estimator=grpo \
@@ -181,6 +190,10 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     +algorithm.sod.stepwise_feedback.debug=false \
     +algorithm.sod.stepwise_feedback.student_max_tokens=512 \
     +algorithm.sod.stepwise_feedback.teacher_max_tokens=512 \
+    +algorithm.sod.stepwise_feedback.original_student_max_prompt_length=2048 \
+    +algorithm.sod.stepwise_feedback.eval_student_max_prompt_length=2048 \
+    +algorithm.sod.stepwise_feedback.teacher_feedback_max_prompt_length=4096 \
+    +algorithm.sod.stepwise_feedback.regeneration_max_prompt_length=4096 \
     +algorithm.sod.stepwise_feedback.teacher_temperature=0.0 \
     +algorithm.sod.stepwise_feedback.teacher_top_p=1.0 \
     +algorithm.sod.stepwise_feedback.teacher_top_k=-1 \
@@ -197,7 +210,7 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     env.rollout.n=$group_size \
     env.resources_per_worker.num_cpus=$num_cpus_per_env_worker \
     trainer.critic_warmup=0 \
-    trainer.logger=['console','wandb'] \
+    'trainer.logger=["console","wandb"]' \
     trainer.project_name='verl_agent_alfworld' \
     trainer.experiment_name=sod_oprd_bridge_stepwise_feedback_vllm_feedback_formal150_save10_eval5_8gpu_tp2 \
     trainer.n_gpus_per_node=8 \
@@ -206,7 +219,7 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     trainer.save_freq=10 \
     trainer.test_freq=5 \
     trainer.val_before_train=True \
-    trainer.resume_mode=auto \
+    trainer.resume_mode=$RESUME_MODE \
     trainer.total_epochs=150 \
     trainer.total_training_steps=150 \
     "$@"

@@ -20,6 +20,7 @@ CONDA_ENV="${CONDA_ENV:-atod-oprd}"
 CONDA_SH="${CONDA_SH:-/path/to/miniconda3/etc/profile.d/conda.sh}"
 WANDB_MODE="${WANDB_MODE:-online}"
 WANDB_API_KEY="${WANDB_API_KEY:-}"
+RESUME_MODE="${RESUME_MODE:-disable}"
 
 # These files are included in the repository after `git lfs pull`.
 # Change them only when using external copies.
@@ -52,9 +53,16 @@ export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME}"
 export PYTHONPATH="$repo_root:${PYTHONPATH:-}"
 export ALFWORLD_DATA
 export WANDB_MODE
+unset WANDB_DISABLED
 if [[ -n "$WANDB_API_KEY" ]]; then
     export WANDB_API_KEY
 fi
+echo "WANDB_MODE=$WANDB_MODE"
+python - <<'PY'
+import os
+print("WANDB_API_KEY set:", bool(os.environ.get("WANDB_API_KEY")))
+print("WANDB_DISABLED:", os.environ.get("WANDB_DISABLED"))
+PY
 unset ROCR_VISIBLE_DEVICES
 
 mkdir -p "$TMPDIR" "$RAY_TMPDIR" "$HF_HOME"
@@ -137,6 +145,10 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     +algorithm.sod.stepwise_feedback.debug=false \
     +algorithm.sod.stepwise_feedback.student_max_tokens=512 \
     +algorithm.sod.stepwise_feedback.teacher_max_tokens=512 \
+    +algorithm.sod.stepwise_feedback.original_student_max_prompt_length=2048 \
+    +algorithm.sod.stepwise_feedback.eval_student_max_prompt_length=2048 \
+    +algorithm.sod.stepwise_feedback.teacher_feedback_max_prompt_length=4096 \
+    +algorithm.sod.stepwise_feedback.regeneration_max_prompt_length=4096 \
     +algorithm.sod.stepwise_feedback.teacher_temperature=0.0 \
     +algorithm.sod.stepwise_feedback.teacher_top_p=1.0 \
     +algorithm.sod.stepwise_feedback.teacher_top_k=-1 \
@@ -162,7 +174,7 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     trainer.save_freq=10 \
     trainer.test_freq=5 \
     trainer.val_before_train=True \
-    trainer.resume_mode=auto \
+    trainer.resume_mode=$RESUME_MODE \
     trainer.total_epochs=150 \
     trainer.total_training_steps=150 \
     "$@"
