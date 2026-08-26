@@ -6,6 +6,11 @@ torchdata==0.11.0
 transformers==4.57.3
 accelerate==1.14.0
 datasets==5.0.1
+sentencepiece==0.2.2
+tokenizers==0.22.2
+huggingface-hub==0.36.2
+protobuf==6.33.6
+regex==2026.7.19
 numpy==2.2.6
 pandas==3.0.5
 peft==0.20.0
@@ -21,12 +26,32 @@ qwen-vl-utils[decord]==0.0.14
 ray[default]==2.50.0
 tensordict==0.10.0
 safetensors==0.8.0
+psutil==7.2.2
+tqdm==4.70.0
+setproctitle==1.3.7
+prettytable==3.18.0
+einops==0.8.2
 
 # ALFWorld environment.
 alfworld==0.4.2
 fast-downward-textworld==20.6.4
 textworld==1.7.0
+gymnasium==0.29.1
+PyYAML==6.0.3
+pillow==12.3.0
+opencv-python-headless==5.0.0.93
+networkx==3.6.1
+scipy==1.18.0
 
 # GPU rollout, attention, and logging.
 vllm==0.11.0
+xformers==0.0.32.post1
+ninja==1.13.0
 wandb==0.28.2
+swanlab==0.9.4
+
+# Async rollout/server utilities used by verl/vLLM paths.
+aiohttp==3.14.3
+fastapi==0.141.1
+uvicorn==0.52.3
+requests==2.34.2

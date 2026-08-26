@@ -15,7 +15,9 @@ When use_external_teacher=False:
     privileged skill information).
 """
 
+from pathlib import Path
 from pprint import pprint
+import json
 
 import numpy as np
 import ray
@@ -100,6 +102,109 @@ class SODRayTrainer(RLSDRayTrainer):
             # Original SDAR self-distillation path
             return super()._compute_teacher_log_probs(batch)
 
+    def _init_bridge_collection(self):
+        """Initialize the optional token-corpus collection state."""
+        self.bridge_collect_only = bool(
+            self.config.trainer.get("bridge_collect_only", False)
+        )
+        self.bridge_corpus_dir = None
+        self.bridge_target_turns = 0
+        self.bridge_collected_turns = 0
+        self.bridge_shard_index = 0
+        if not self.bridge_collect_only:
+            return
+
+        corpus_dir = self.config.trainer.get("bridge_corpus_dir", "")
+        if not corpus_dir:
+            raise ValueError(
+                "trainer.bridge_collect_only=True requires "
+                "trainer.bridge_corpus_dir"
+            )
+        self.bridge_corpus_dir = Path(corpus_dir)
+        self.bridge_corpus_dir.mkdir(parents=True, exist_ok=True)
+        self.bridge_target_turns = int(
+            self.config.trainer.get("bridge_target_turns", 8192)
+        )
+        if self.bridge_target_turns <= 0:
+            raise ValueError("trainer.bridge_target_turns must be positive")
+
+        manifest_path = self.bridge_corpus_dir / "manifest.json"
+        if manifest_path.exists():
+            with manifest_path.open("r", encoding="utf-8") as handle:
+                manifest = json.load(handle)
+            self.bridge_collected_turns = int(manifest.get("num_turns", 0))
+            self.bridge_shard_index = int(manifest.get("num_shards", 0))
+        print(
+            "[bridge_collect] corpus_dir=%s target_turns=%d already_collected=%d"
+            % (
+                self.bridge_corpus_dir,
+                self.bridge_target_turns,
+                self.bridge_collected_turns,
+            ),
+            flush=True,
+        )
+
+    def _dump_bridge_corpus_shard(self, batch: DataProto) -> int:
+        """Save rollout token tensors without running teacher or actor update."""
+        if not self.bridge_collect_only or self.bridge_corpus_dir is None:
+            return 0
+        remaining = self.bridge_target_turns - self.bridge_collected_turns
+        if remaining <= 0:
+            return 0
+
+        response_mask = compute_response_mask(batch)
+        count = min(len(batch), remaining)
+        tensor_keys = ["input_ids", "attention_mask", "responses", "response_mask"]
+        tensors = {}
+        for key in tensor_keys:
+            value = response_mask if key == "response_mask" else batch.batch[key]
+            tensors[key] = value[:count].detach().cpu()
+
+        metadata = {}
+        for key in (
+            "traj_uid",
+            "turn_step",
+            "is_action_valid",
+            "episode_rewards",
+            "episode_lengths",
+            "success_rate",
+            "webshop_task_score (not success_rate)",
+        ):
+            value = batch.non_tensor_batch.get(key)
+            if value is not None:
+                metadata[key] = value[:count].tolist()
+
+        shard_path = self.bridge_corpus_dir / (
+            "shard_%05d.pt" % self.bridge_shard_index
+        )
+        torch.save(
+            {
+                "format": "atod_webshop_bridge_v1",
+                "num_turns": count,
+                "tensors": tensors,
+                "metadata": metadata,
+            },
+            shard_path,
+        )
+        self.bridge_shard_index += 1
+        self.bridge_collected_turns += count
+        manifest = {
+            "format": "atod_webshop_bridge_v1",
+            "num_turns": self.bridge_collected_turns,
+            "num_shards": self.bridge_shard_index,
+            "target_turns": self.bridge_target_turns,
+        }
+        with (self.bridge_corpus_dir / "manifest.json").open(
+            "w", encoding="utf-8"
+        ) as handle:
+            json.dump(manifest, handle, indent=2)
+        print(
+            "[bridge_collect] saved=%s shard_turns=%d total_turns=%d"
+            % (shard_path, count, self.bridge_collected_turns),
+            flush=True,
+        )
+        return count
+
     def fit(self):
         """
         The training loop of SOD.
@@ -123,6 +228,7 @@ class SODRayTrainer(RLSDRayTrainer):
 
         self.global_steps = 0
         self._load_checkpoint()
+        self._init_bridge_collection()
 
         if self.val_reward_fn is not None and self.config.trainer.get("val_before_train", True):
             val_metrics = self._validate()
@@ -168,6 +274,21 @@ class SODRayTrainer(RLSDRayTrainer):
                             envs=self.envs,
                             is_train=True,
                         )
+
+                    if self.bridge_collect_only:
+                        with _timer("bridge_dump", timing_raw):
+                            self._dump_bridge_corpus_shard(gen_batch_output)
+                        progress_bar.update(1)
+                        if self.bridge_collected_turns >= self.bridge_target_turns:
+                            print(
+                                "[bridge_collect] target reached; stopping before "
+                                "reward, teacher, and actor update",
+                                flush=True,
+                            )
+                            progress_bar.close()
+                            return
+                        self.global_steps += 1
+                        continue
 
                     del batch
                     batch = gen_batch_output

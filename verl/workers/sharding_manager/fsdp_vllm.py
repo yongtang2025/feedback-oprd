@@ -263,7 +263,6 @@ class FSDPVLLMShardingManager(BaseShardingManager):
     @staticmethod
     def _materialize_dtensor_for_vllm(param, device):
         """Materialize a DTensor without functional/coalesced NCCL all-gather."""
-
         local_tensor = param.to_local().to(device, non_blocking=True)
         result = local_tensor
         for mesh_dim, placement in reversed(tuple(enumerate(param.placements))):

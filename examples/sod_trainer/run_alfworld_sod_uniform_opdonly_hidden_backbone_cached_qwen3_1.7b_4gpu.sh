@@ -1,9 +1,6 @@
-set -euo pipefail
 set -x
-repo_root="${ATOD_REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 source "${CONDA_SH:-$HOME/miniconda3/etc/profile.d/conda.sh}"
-conda activate "${CONDA_ENV:-atod-oprd}"
-cd "$repo_root"
+conda activate atod-oprd
 
 ENGINE=${ENGINE:-vllm}
 if [[ $# -gt 0 && "$1" != *=* && "$1" != +*=* ]]; then
@@ -23,17 +20,17 @@ epsilon=1e-6
 delta=0.2
 opd_only=true
 
-student_model_path="${STUDENT_MODEL_PATH:-$HOME/models/models/Qwen--Qwen3-1.7B/snapshots/master}"
-teacher_model_path="${TEACHER_MODEL_PATH:-$HOME/models/models/Qwen--Qwen3-8B/snapshots/master}"
-bridge_bank_path="${BRIDGE_BANK_PATH:-$repo_root/artifacts/bridge_bank/ps_bank.pt}"
+student_model_path=${STUDENT_MODEL_PATH:-$HOME/models/Qwen3-1.7B}
+teacher_model_path=${TEACHER_MODEL_PATH:-$HOME/models/Qwen3-8B}
+bridge_bank_path=${BRIDGE_BANK_PATH:-artifacts/bridge_bank/bank_alfworld_1p7b_8b_r64.pt}
 
 train_data_size=16
 val_data_size=128
 group_size=8
 experiment_name="sod_uniform_opdonly_oprd_bridge_hidden_backbone_cached_alfworld_qwen3_1p7b_to_8b_formal"
-export ALFWORLD_DATA="${ALFWORLD_DATA:-$HOME/data/alfworld}"
-train_file="${TRAIN_FILE:-$repo_root/data/verl-agent/text/train.parquet}"
-val_file="${VAL_FILE:-$repo_root/data/verl-agent/text/test.parquet}"
+export ALFWORLD_DATA=$HOME/data/alfworld
+train_file=$HOME/data/verl-agent/text/train.parquet
+val_file=$HOME/data/verl-agent/text/test.parquet
 
 export WANDB_API_KEY="${WANDB_API_KEY:-your_wandb_api_key_here}"
 

@@ -20,7 +20,8 @@ skills 以及相关示例。自定义的 OPRD-Bridge 模块已经放在正确的
 - `artifacts/bridge_bank/`：rank-64 的 bridge bank。默认包含 1.7B→8B 的
   `ps_bank.pt`。1.7B→4BGRPO 的 bank 可放在
   `artifacts/bridge_bank/bank_alfworld_1p7b_4bgrpo_r64.pt`，或通过
-  `BRIDGE_BANK_PATH` 指向外部文件。
+  `BRIDGE_BANK_PATH` 指向外部文件。0.6B→4BGRPO 的 bank 建议命名为
+  `artifacts/bridge_bank/bank_alfworld_0p6b_4bgrpo_r64.pt`。
 - `ENVIRONMENT.md`：从实际 `atod-oprd` 环境导出的关键依赖说明。
 
 ## Bridge Bank 构建
@@ -60,7 +61,7 @@ export ALFWORLD_DATA=/path/to/alfworld
 
 复现者可以先阅读[快速开始](QUICKSTART.md)。
 
-在仓库根目录执行精简复现安装：
+在仓库根目录执行复现友好的依赖安装：
 
 ```bash
 conda create -n atod-oprd python=3.12 pip -y
@@ -70,7 +71,8 @@ pip install --no-build-isolation flash-attn==2.7.4.post1
 pip install --no-deps -e .
 ```
 
-`requirements_repro.txt` 是面向复现者的精简依赖清单。`environment.yml` 和
+`requirements_repro.txt` 是面向复现者的依赖清单，包含训练入口、verl/vLLM、
+ALFWorld 和日志记录常用的直接依赖。`environment.yml` 和
 `requirements_atod_oprd_actual.txt` 是服务器实际环境快照，仅用于记录版本，
 不建议直接用于其他机器安装。原 ATOD 环境快照另存为 `environment_atod_upstream.yml`。
 
@@ -154,6 +156,12 @@ bash hidden_only/run_formal.sh
 bash hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sh
 ```
 
+如果要运行 0.6B 学生 + 4B GRPO 教师的 hidden-only 正式配置，使用：
+
+```bash
+bash hidden_only/run_alfworld_hidden_only_0p6b_4bgrpo_8gpu.sh
+```
+
 ## 实验脚本简介
 
 - `hidden_only/run_formal.sh`：非 Slurm 环境的 hidden-only 基线直接运行入口。
@@ -166,6 +174,11 @@ bash hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sh
   `artifacts/bridge_bank/bank_alfworld_1p7b_4bgrpo_r64.pt`。
 - `hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sbatch`：同一 hidden-only 配置的
   Slurm 版本，集群用户可按机器资源修改 SBATCH 头部。
+- `hidden_only/run_alfworld_hidden_only_0p6b_4bgrpo_8gpu.sh`：0.6B 学生 + 4B GRPO 教师的
+  hidden-only 正式入口，默认 8 GPU、TP=1、WandB 日志，默认查找
+  `artifacts/bridge_bank/bank_alfworld_0p6b_4bgrpo_r64.pt`。
+- `hidden_only/run_alfworld_hidden_only_0p6b_4bgrpo_8gpu.sbatch`：同一 0.6B→4BGRPO
+  hidden-only 配置的 Slurm 版本。
 - `stepwise_feedback/run_formal.sbatch`：Step-wise Feedback-Guided OPRD-Bridge。每个
   ALFWorld turn 中，学生先生成原始 response，teacher 通过 vLLM 给出反馈，学生重新生成，
   环境执行重写后的动作，并在重写后的 response 上计算 hidden loss。正式配置同样为
