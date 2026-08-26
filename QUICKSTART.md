@@ -73,3 +73,9 @@ bash stepwise_feedback/run_formal.sh
 ```bash
 bash hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sh
 ```
+
+0.6B 学生 + 4B GRPO 教师的 hidden-only 正式配置对应：
+
+```bash
+bash hidden_only/run_alfworld_hidden_only_0p6b_4bgrpo_8gpu.sh
+```
