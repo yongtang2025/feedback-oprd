@@ -61,7 +61,7 @@ export ALFWORLD_DATA=/path/to/alfworld
 
 复现者可以先阅读[快速开始](QUICKSTART.md)。
 
-在仓库根目录执行精简复现安装：
+在仓库根目录执行复现友好的依赖安装：
 
 ```bash
 conda create -n atod-oprd python=3.12 pip -y
@@ -71,7 +71,8 @@ pip install --no-build-isolation flash-attn==2.7.4.post1
 pip install --no-deps -e .
 ```
 
-`requirements_repro.txt` 是面向复现者的精简依赖清单。`environment.yml` 和
+`requirements_repro.txt` 是面向复现者的依赖清单，包含训练入口、verl/vLLM、
+ALFWorld 和日志记录常用的直接依赖。`environment.yml` 和
 `requirements_atod_oprd_actual.txt` 是服务器实际环境快照，仅用于记录版本，
 不建议直接用于其他机器安装。原 ATOD 环境快照另存为 `environment_atod_upstream.yml`。
 

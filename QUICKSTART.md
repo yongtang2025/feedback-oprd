@@ -18,7 +18,7 @@ pip install --no-build-isolation flash-attn==2.7.4.post1
 pip install --no-deps -e .
 ```
 
-这里使用的是精简复现依赖，不使用服务器环境导出的 `environment.yml`。
+这里使用的是复现友好的依赖清单，不使用服务器环境导出的 `environment.yml`。
 如果 Conda 环境已经存在，可以跳过环境创建步骤。
 
 ## 2. 准备 ALFWorld 数据

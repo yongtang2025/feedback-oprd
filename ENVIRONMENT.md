@@ -1,6 +1,7 @@
 # 实际训练环境
 
-`requirements_repro.txt` 是面向复现者的精简安装清单。`environment.yml` 和
+`requirements_repro.txt` 是面向复现者的安装清单，包含训练入口、verl/vLLM、
+ALFWorld 和日志记录常用的直接依赖。`environment.yml` 和
 `requirements_atod_oprd_actual.txt` 是从服务器当前使用的 `atod-oprd` 环境导出的
 版本快照，仅用于记录和排查，不建议直接在其他机器上创建环境。
 
