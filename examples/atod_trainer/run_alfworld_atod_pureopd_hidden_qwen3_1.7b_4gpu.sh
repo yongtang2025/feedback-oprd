@@ -1,5 +1,5 @@
 set -x
-source /home/myli/miniconda3/etc/profile.d/conda.sh
+source "${CONDA_SH:-$HOME/miniconda3/etc/profile.d/conda.sh}"
 conda activate atod-oprd
 
 ENGINE=${ENGINE:-vllm}
@@ -31,9 +31,9 @@ curriculum_bias=0.5
 curriculum_min_weight=0.05
 curriculum_max_weight=1.0
 
-student_model_path=/home/myli/models/models/Qwen--Qwen3-1.7B/snapshots/master
-teacher_model_path=/home/myli/models/models/Qwen--Qwen3-8B/snapshots/master
-bridge_bank_path=/home/myli/r/oprd_bridge_banks/alfworld_qwen3_17b_to_8b_sdar_clean_b16tb16_r8_f250_buffer4096_rows65536_all_layers/rank_64/ps_bank.pt
+student_model_path=${STUDENT_MODEL_PATH:-$HOME/models/Qwen3-1.7B}
+teacher_model_path=${TEACHER_MODEL_PATH:-$HOME/models/Qwen3-8B}
+bridge_bank_path=${BRIDGE_BANK_PATH:-artifacts/bridge_bank/bank_alfworld_1p7b_8b_r64.pt}
 
 train_data_size=16
 val_data_size=128

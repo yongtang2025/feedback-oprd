@@ -144,7 +144,8 @@ class ActorRolloutRefWorker(_BackboneActorRolloutRefWorker):
             if self.rank == 0:
                 print(
                     "[StepFeedback] Building teacher feedback vLLM rollout "
-                    f"from {local_path} with tp={infer_tp}, "
+                    f"from {local_path} with world_size={self.world_size}, "
+                    f"dp={dp}, tp={infer_tp}, "
                     f"gpu_memory_utilization={rollout_config.gpu_memory_utilization}, "
                     f"enable_sleep_mode={rollout_config.enable_sleep_mode}"
                 )

@@ -1,6 +1,6 @@
 project: ALFWORLD_TCOD
 name: oprd_bridge_construction_sdar_clean_b16tb16_r8_f250
-checkpoint_root_dir: /home/myli/r/tcod_checkpoints
+checkpoint_root_dir: ./outputs/tcod_checkpoints
 continue_from_checkpoint: false
 
 algorithm:
@@ -14,7 +14,7 @@ algorithm:
     lr: 1e-6
 
 model:
-  model_path: /home/myli/models/models/Qwen--Qwen3-1.7B/snapshots/master
+  model_path: /path/to/Qwen3-1.7B
   max_prompt_tokens: 2048
   max_response_tokens: 512
   enable_prompt_truncation: false
@@ -31,7 +31,7 @@ buffer:
     taskset:
       name: alfworld
       storage_type: file
-      path: /home/myli/github_repos/TCOD/TCOD_examples/alfworld/alfworld_data/train_expert.jsonl
+      path: ./data/alfworld/train_expert.jsonl
       split: train
       format:
         prompt_key: game_file
@@ -46,7 +46,7 @@ buffer:
     experience_buffer:
       name: oprd_bridge_construction_sdar_clean_b16tb16_r8_f250_buffer
       storage_type: queue
-      path: sqlite:////home/myli/r/tcod_checkpoints/ALFWORLD_TCOD/oprd_bridge_construction_sdar_clean_b16tb16_r8_f250/buffer/oprd_bridge_construction_sdar_clean_b16tb16_r8_f250_buffer.db
+      path: sqlite:///./outputs/tcod_checkpoints/ALFWORLD_TCOD/oprd_bridge_construction_sdar_clean_b16tb16_r8_f250/buffer/oprd_bridge_construction_sdar_clean_b16tb16_r8_f250_buffer.db
 
 explorer:
   eval_interval: 5
@@ -68,10 +68,10 @@ explorer:
     enable_thinking: false
   auxiliary_models: []
   env_vars:
-    TMPDIR: /home/myli/tcod_runtime/tmp_oprd_bridge_construction_r512
-    TEMP: /home/myli/tcod_runtime/tmp_oprd_bridge_construction_r512
-    TMP: /home/myli/tcod_runtime/tmp_oprd_bridge_construction_r512
-    RAY_TMPDIR: /home/myli/tcod_runtime/ray_tmp_oprd_bridge_construction_r512
+    TMPDIR: ./outputs/tmp_oprd_bridge_construction_r512
+    TEMP: ./outputs/tmp_oprd_bridge_construction_r512
+    TMP: ./outputs/tmp_oprd_bridge_construction_r512
+    RAY_TMPDIR: ./outputs/ray_tmp_oprd_bridge_construction_r512
 
 synchronizer:
   sync_method: nccl
@@ -97,7 +97,7 @@ monitor:
   monitor_type: swanlab
   monitor_args:
     mode: offline
-    logdir: /home/myli/r/tcod_logs/swanlab/oprd_bridge_construction_sdar_clean_b16tb16_r8_f250
+    logdir: ./outputs/swanlab/oprd_bridge_construction_sdar_clean_b16tb16_r8_f250
     description: Raw 512-response bridge-construction data for joint rank64 teacher and student bridge fitting.
     tags:
       - alfworld
