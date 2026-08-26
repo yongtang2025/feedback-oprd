@@ -66,3 +66,10 @@ wandb login
 ```bash
 bash stepwise_feedback/run_formal.sh
 ```
+
+如果只想运行 1.7B 学生 + 4B GRPO 教师的 hidden-only 正式配置，填写
+`hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sh` 顶部的模型路径后执行：
+
+```bash
+bash hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sh
+```

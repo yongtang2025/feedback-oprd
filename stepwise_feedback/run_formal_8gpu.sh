@@ -113,7 +113,7 @@ export ALFWORLD_DATA=$HOME/data/alfworld
 export HF_ENDPOINT=https://hf-mirror.com
 
 set +x
-export WANDB_API_KEY="${WANDB_API_KEY:-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}"
+export WANDB_API_KEY="${WANDB_API_KEY:-}"
 set -x
 echo "WANDB_MODE=$WANDB_MODE"
 python - <<'PY'

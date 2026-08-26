@@ -17,7 +17,10 @@ skills 以及相关示例。自定义的 OPRD-Bridge 模块已经放在正确的
 - `patches/`：实验所需的 ATOD/verl 补丁快照。
 - `examples/`：OPD、SOD 和 ATOD 训练示例脚本。
 - `data/`：较小的训练/验证 parquet 文件；原始 ALFWorld 数据不包含在仓库中。
-- `artifacts/bridge_bank/`：rank-64 的 `ps_bank.pt` bridge bank。
+- `artifacts/bridge_bank/`：rank-64 的 bridge bank。默认包含 1.7B→8B 的
+  `ps_bank.pt`。1.7B→4BGRPO 的 bank 可放在
+  `artifacts/bridge_bank/bank_alfworld_1p7b_4bgrpo_r64.pt`，或通过
+  `BRIDGE_BANK_PATH` 指向外部文件。
 - `ENVIRONMENT.md`：从实际 `atod-oprd` 环境导出的关键依赖说明。
 
 ## Bridge Bank 构建
@@ -96,7 +99,9 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback
 - `VAL_FILE`
 - `ALFWORLD_DATA`
 
-其中 `TRAIN_FILE`、`VAL_FILE` 和 `BRIDGE_BANK_PATH` 默认使用仓库内的文件；
+其中 `TRAIN_FILE` 和 `VAL_FILE` 默认使用仓库内的 parquet 文件；
+`BRIDGE_BANK_PATH` 默认指向 `artifacts/bridge_bank/` 下约定的 bank 文件名，
+请将对应的 `.pt` 文件放到该位置，或手动覆盖为实际路径。
 `ATOD_REPO`、`CONDA_ENV` 和 `CONDA_SH` 在安装位置与默认值一致时也不需要设置。
 首次 clone 后如果仓库使用 Git LFS，请先执行 `git lfs pull`。
 
@@ -143,12 +148,24 @@ bash stepwise_feedback/run_formal.sh
 bash hidden_only/run_formal.sh
 ```
 
+如果要运行 1.7B 学生 + 4B GRPO 教师的 hidden-only 正式配置，使用：
+
+```bash
+bash hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sh
+```
+
 ## 实验脚本简介
 
 - `hidden_only/run_formal.sh`：非 Slurm 环境的 hidden-only 基线直接运行入口。
 - `hidden_only/run_formal.sbatch`：OPRD-Bridge hidden-only 基线的正式参数脚本。保留 SOD/OPD rollout
   框架，但训练更新主要使用 hidden-state bridge loss，不使用逐步教师反馈。正式配置为
   150 steps，保存间隔 10 steps，评估间隔 5 steps。
+- `hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sh`：1.7B 学生 + 4B GRPO 教师的
+  hidden-only 正式入口，默认 8 GPU、TP=1、WandB 日志，使用
+  `BRIDGE_BANK_PATH` 指定的 1.7B→4BGRPO bridge bank；如果没有覆盖该变量，则默认查找
+  `artifacts/bridge_bank/bank_alfworld_1p7b_4bgrpo_r64.pt`。
+- `hidden_only/run_alfworld_hidden_only_1p7b_4bgrpo_8gpu.sbatch`：同一 hidden-only 配置的
+  Slurm 版本，集群用户可按机器资源修改 SBATCH 头部。
 - `stepwise_feedback/run_formal.sbatch`：Step-wise Feedback-Guided OPRD-Bridge。每个
   ALFWorld turn 中，学生先生成原始 response，teacher 通过 vLLM 给出反馈，学生重新生成，
   环境执行重写后的动作，并在重写后的 response 上计算 hidden loss。正式配置同样为
