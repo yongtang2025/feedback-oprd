@@ -16,7 +16,7 @@ export HYDRA_FULL_ERROR=1
 # Logging
 # ============================================================
 LOG_DIR="$REPO_ROOT/outputs/vc_logs"
-RUN_NAME="qwen3_t8b_s1.7b_alfworld_oprd_stepwise_feedback"
+RUN_NAME="qwen3_t4b_s1.7b_alfworld_oprd_hidden_only"
 TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
 mkdir -p "$LOG_DIR"
@@ -79,10 +79,8 @@ export OMP_NUM_THREADS=1
 num_cpus_per_env_worker=0.1
 
 # =====================================================
-# Step-wise Feedback-Guided OPRD-Bridge configuration
+# OPRD-Bridge hidden-only configuration
 # =====================================================
-# External teacher provides step-wise feedback on top of the OPRD
-# advantage-distillation path (mode=uniform, opd_only=true).
 use_external_teacher=true
 sod_mode="uniform"
 opd_coef=1.0
@@ -90,14 +88,11 @@ opd_only=true
 
 # Model paths
 # Student: Qwen3-1.7B
-# Teacher: Qwen3-8B
+# Teacher: Qwen3-4B-GRPO-ALFWorld
 student_model_path=/hpc_stor01/home/yong.tang_sx/models/qwen/Qwen3-1.7B
-teacher_model_path=/hpc_stor01/home/yong.tang_sx/models/qwen/Qwen3-8B
+teacher_model_path=/hpc_stor01/home/yong.tang_sx/models/Qwen3-4B-GRPO-ALFWorld-step150-SR73p44
 
-# Bridge bank and skills paths.
-bridge_bank_path="$REPO_ROOT/artifacts/bridge_bank/ps_bank.pt"
-train_file="$HOME/data/verl-agent/text/train.parquet"
-val_file="$HOME/data/verl-agent/text/test.parquet"
+bridge_bank_path=/hpc_stor01/home/yong.tang_sx/agents/feedback-oprd/artifacts/bridge_bank/bank_alfworld_1p7b_4bgrpo_r64.pt
 
 # =====================================================
 # Training configuration
@@ -105,8 +100,7 @@ val_file="$HOME/data/verl-agent/text/test.parquet"
 train_data_size=16
 val_data_size=128
 group_size=8
-experiment_name="oprd_stepwise_feedback_alfworld_qwen3_s1.7b_t8b_${sod_mode}_only_coef${opd_coef}"
-RESUME_MODE="${RESUME_MODE:-disable}"
+experiment_name="oprd_bridge_hidden_only_alfworld_1p7b_to_4bgrpo_tp1_step150"
 export ALFWORLD_DATA=$HOME/data/alfworld
 export HF_ENDPOINT=https://hf-mirror.com
 
@@ -114,17 +108,15 @@ set +x
 export WANDB_API_KEY="${WANDB_API_KEY:-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}"
 set -x
 
-python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
+python3 -m verl.trainer.main_sod_oprd_bridge_backbone_cached \
     algorithm.adv_estimator=grpo \
-    data.train_files="$train_file" \
-    data.val_files="$val_file" \
+    data.train_files=$HOME/data/verl-agent/text/train.parquet \
+    data.val_files=$HOME/data/verl-agent/text/test.parquet \
     data.train_batch_size=$train_data_size \
     data.val_batch_size=$val_data_size \
-    data.max_prompt_length=4096 \
+    data.max_prompt_length=2048 \
     data.max_response_length=512 \
     data.filter_overlong_prompts=True \
-    data.filter_overlong_prompts_workers=1 \
-    +data.dataloader_num_workers=0 \
     data.truncation='error' \
     data.return_raw_chat=True \
     +data.apply_chat_template_kwargs.enable_thinking=False \
@@ -135,17 +127,16 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=32 \
     actor_rollout_ref.actor.use_kl_loss=False \
     +actor_rollout_ref.actor.use_oprd_bridge_hidden_loss=True \
-    +actor_rollout_ref.actor.oprd_bridge_checkpoint_path="$bridge_bank_path" \
+    +actor_rollout_ref.actor.oprd_bridge_checkpoint_path=$bridge_bank_path \
     +actor_rollout_ref.actor.oprd_bridge_hidden_loss_coef=1.0 \
     +actor_rollout_ref.actor.oprd_bridge_hidden_only_update=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=32 \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=2 \
-    actor_rollout_ref.rollout.reuse_weights_across_turns=true \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=$ENGINE \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.20 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
     actor_rollout_ref.rollout.enable_chunked_prefill=False \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.free_cache_engine=False \
@@ -154,14 +145,6 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=32 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     +actor_rollout_ref.ref.model.path=$teacher_model_path \
-    +actor_rollout_ref.ref.feedback_backend=vllm \
-    +actor_rollout_ref.ref.feedback_tensor_model_parallel_size=2 \
-    +actor_rollout_ref.ref.feedback_gpu_memory_utilization=0.30 \
-    +actor_rollout_ref.ref.feedback_enable_sleep_mode=false \
-    +actor_rollout_ref.ref.feedback_release_after_rollout=false \
-    +actor_rollout_ref.ref.feedback_response_length=512 \
-    +actor_rollout_ref.ref.feedback_max_num_batched_tokens=8192 \
-    +actor_rollout_ref.ref.feedback_max_num_seqs=4 \
     actor_rollout_ref.actor.use_invalid_action_penalty=True \
     actor_rollout_ref.actor.invalid_action_penalty_coef=0.1 \
     algorithm.use_kl_in_reward=False \
@@ -174,28 +157,11 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     +algorithm.sod.skills_dir=skills/alfworld \
     +algorithm.sod.skill_all=false \
     +algorithm.sod.hidden_signal.enabled=true \
-    +algorithm.sod.hidden_signal.bridge_checkpoint_path="$bridge_bank_path" \
+    +algorithm.sod.hidden_signal.bridge_checkpoint_path=$bridge_bank_path \
     +algorithm.sod.hidden_signal.loss_coef=1.0 \
     +algorithm.sod.hidden_signal.micro_batch_size=32 \
     +algorithm.sod.hidden_signal.response_last_k=512 \
     +algorithm.sod.hidden_signal.disable_logprob_opd=true \
-    +algorithm.sod.stepwise_feedback.debug=false \
-    +algorithm.sod.stepwise_feedback.student_max_tokens=512 \
-    +algorithm.sod.stepwise_feedback.teacher_max_tokens=512 \
-    +algorithm.sod.stepwise_feedback.original_student_max_prompt_length=2048 \
-    +algorithm.sod.stepwise_feedback.eval_student_max_prompt_length=2048 \
-    +algorithm.sod.stepwise_feedback.teacher_feedback_max_prompt_length=4096 \
-    +algorithm.sod.stepwise_feedback.regeneration_max_prompt_length=4096 \
-    +algorithm.sod.stepwise_feedback.teacher_temperature=0.0 \
-    +algorithm.sod.stepwise_feedback.teacher_top_p=1.0 \
-    +algorithm.sod.stepwise_feedback.teacher_top_k=-1 \
-    +algorithm.sod.stepwise_feedback.teacher_do_sample=false \
-    +algorithm.sod.stepwise_feedback.separate_ref_pool=false \
-    +algorithm.sod.stepwise_feedback.log_action_stats=true \
-    +algorithm.sod.stepwise_feedback.log_samples=false \
-    '+algorithm.sod.stepwise_feedback.log_sample_turns=[0,1,5,10,20,29,40,49]' \
-    +algorithm.sod.stepwise_feedback.log_sample_count=1 \
-    +algorithm.sod.stepwise_feedback.log_sample_max_chars=900 \
     env.env_name=alfworld/AlfredTWEnv \
     env.seed=0 \
     env.max_steps=50 \
@@ -204,14 +170,12 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='verl_agent_alfworld' \
-    trainer.experiment_name=sod_oprd_bridge_stepwise_feedback_step150_tp2 \
+    trainer.experiment_name=$experiment_name \
     trainer.n_gpus_per_node=8 \
     trainer.ray_wait_register_center_timeout=600 \
     trainer.nnodes=1 \
     trainer.save_freq=-1 \
     trainer.test_freq=5 \
-    trainer.val_before_train=True \
-    trainer.resume_mode=$RESUME_MODE \
     trainer.total_epochs=150 \
-    trainer.total_training_steps=150 \
+    trainer.val_before_train=True \
     "$@"

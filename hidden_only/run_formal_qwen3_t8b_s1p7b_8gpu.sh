@@ -16,7 +16,7 @@ export HYDRA_FULL_ERROR=1
 # Logging
 # ============================================================
 LOG_DIR="$REPO_ROOT/outputs/vc_logs"
-RUN_NAME="qwen3_t8b_s1.7b_alfworld_oprd_stepwise_feedback"
+RUN_NAME="qwen3_t8b_s1.7b_alfworld_oprd_bridge_hidden_only"
 TIMESTAMP=$(date '+%Y%m%d_%H%M%S')
 
 mkdir -p "$LOG_DIR"
@@ -79,10 +79,10 @@ export OMP_NUM_THREADS=1
 num_cpus_per_env_worker=0.1
 
 # =====================================================
-# Step-wise Feedback-Guided OPRD-Bridge configuration
+# OPRD-Bridge hidden-only baseline configuration
 # =====================================================
-# External teacher provides step-wise feedback on top of the OPRD
-# advantage-distillation path (mode=uniform, opd_only=true).
+# Hidden-only distillation path (mode=uniform, opd_only=true) without
+# external step-wise teacher feedback.
 use_external_teacher=true
 sod_mode="uniform"
 opd_coef=1.0
@@ -105,7 +105,7 @@ val_file="$HOME/data/verl-agent/text/test.parquet"
 train_data_size=16
 val_data_size=128
 group_size=8
-experiment_name="oprd_stepwise_feedback_alfworld_qwen3_s1.7b_t8b_${sod_mode}_only_coef${opd_coef}"
+experiment_name="oprd_bridge_hidden_only_alfworld_qwen3_s1.7b_t8b_${sod_mode}_only_coef${opd_coef}"
 RESUME_MODE="${RESUME_MODE:-disable}"
 export ALFWORLD_DATA=$HOME/data/alfworld
 export HF_ENDPOINT=https://hf-mirror.com
@@ -114,13 +114,13 @@ set +x
 export WANDB_API_KEY="${WANDB_API_KEY:-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}"
 set -x
 
-python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
+python3 -m verl.trainer.main_sod_oprd_bridge_backbone_cached \
     algorithm.adv_estimator=grpo \
     data.train_files="$train_file" \
     data.val_files="$val_file" \
     data.train_batch_size=$train_data_size \
     data.val_batch_size=$val_data_size \
-    data.max_prompt_length=4096 \
+    data.max_prompt_length=2048 \
     data.max_response_length=512 \
     data.filter_overlong_prompts=True \
     data.filter_overlong_prompts_workers=1 \
@@ -179,23 +179,6 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     +algorithm.sod.hidden_signal.micro_batch_size=32 \
     +algorithm.sod.hidden_signal.response_last_k=512 \
     +algorithm.sod.hidden_signal.disable_logprob_opd=true \
-    +algorithm.sod.stepwise_feedback.debug=false \
-    +algorithm.sod.stepwise_feedback.student_max_tokens=512 \
-    +algorithm.sod.stepwise_feedback.teacher_max_tokens=512 \
-    +algorithm.sod.stepwise_feedback.original_student_max_prompt_length=2048 \
-    +algorithm.sod.stepwise_feedback.eval_student_max_prompt_length=2048 \
-    +algorithm.sod.stepwise_feedback.teacher_feedback_max_prompt_length=4096 \
-    +algorithm.sod.stepwise_feedback.regeneration_max_prompt_length=4096 \
-    +algorithm.sod.stepwise_feedback.teacher_temperature=0.0 \
-    +algorithm.sod.stepwise_feedback.teacher_top_p=1.0 \
-    +algorithm.sod.stepwise_feedback.teacher_top_k=-1 \
-    +algorithm.sod.stepwise_feedback.teacher_do_sample=false \
-    +algorithm.sod.stepwise_feedback.separate_ref_pool=false \
-    +algorithm.sod.stepwise_feedback.log_action_stats=true \
-    +algorithm.sod.stepwise_feedback.log_samples=false \
-    '+algorithm.sod.stepwise_feedback.log_sample_turns=[0,1,5,10,20,29,40,49]' \
-    +algorithm.sod.stepwise_feedback.log_sample_count=1 \
-    +algorithm.sod.stepwise_feedback.log_sample_max_chars=900 \
     env.env_name=alfworld/AlfredTWEnv \
     env.seed=0 \
     env.max_steps=50 \
@@ -204,7 +187,7 @@ python3 -m verl.trainer.main_sod_oprd_bridge_stepwise_feedback \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='verl_agent_alfworld' \
-    trainer.experiment_name=sod_oprd_bridge_stepwise_feedback_step150_tp2 \
+    trainer.experiment_name=oprd_alfworld_hidden_only_qwen3_t8b_s1p7b_8gpu_tp2 \
     trainer.n_gpus_per_node=8 \
     trainer.ray_wait_register_center_timeout=600 \
     trainer.nnodes=1 \

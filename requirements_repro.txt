@@ -44,11 +44,11 @@ networkx==3.6.1
 scipy==1.18.0
 
 # GPU rollout, attention, and logging.
-vllm==0.11.0
+# vllm==0.11.0
 xformers==0.0.32.post1
 ninja==1.13.0
 wandb==0.28.2
-swanlab==0.9.4
+# swanlab==0.9.4
 
 # Async rollout/server utilities used by verl/vLLM paths.
 aiohttp==3.14.3
