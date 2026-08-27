@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Direct formal run for OPRD-Bridge hidden-only + token importance on ALFWorld.
-# Student: Qwen3-1.7B. Teacher: Qwen3-4B-GRPO-ALFWorld.
+# Student: Qwen3-1.7B. Teacher: Qwen3-8B.
 # This script is standalone and does not require Slurm.
 
 set -euo pipefail
 
-release_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+release_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 repo_root="${ATOD_REPO:-$release_root}"
 
 # ======================== USER SETTINGS ========================
 # Set the two local model directories explicitly.
 STUDENT_MODEL_PATH="${STUDENT_MODEL_PATH:-/path/to/Qwen3-1.7B}"
-TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-/path/to/Qwen3-4B-GRPO-ALFWorld}"
+TEACHER_MODEL_PATH="${TEACHER_MODEL_PATH:-/path/to/Qwen3-8B}"
 
 # Put the raw ALFWorld files here, or change this path.
 ALFWORLD_DATA="${ALFWORLD_DATA:-$HOME/data/alfworld}"
@@ -24,7 +24,7 @@ WANDB_API_KEY="${WANDB_API_KEY:-}"
 
 # These files are included in the repository after `git lfs pull`.
 # Change them only when using external copies.
-BRIDGE_BANK_PATH="${BRIDGE_BANK_PATH:-$repo_root/artifacts/bridge_bank/bank_alfworld_1p7b_4bgrpo_r64.pt}"
+BRIDGE_BANK_PATH="${BRIDGE_BANK_PATH:-$repo_root/artifacts/bridge_bank/ps_bank.pt}"
 TRAIN_FILE="${TRAIN_FILE:-$repo_root/data/verl-agent/text/train.parquet}"
 VAL_FILE="${VAL_FILE:-$repo_root/data/verl-agent/text/test.parquet}"
 # ====================== END USER SETTINGS ======================
@@ -42,10 +42,10 @@ cd "$repo_root"
 
 run_root="${RUN_ROOT:-$repo_root/runs}"
 run_id="${RUN_ID:-manual}"
-export TMPDIR="${TMPDIR:-$run_root/tmp_hid_tokimp_1p7b_4bgrpo_$run_id}"
+export TMPDIR="${TMPDIR:-$run_root/tmp_hid_tokimp_1p7b_8b_$run_id}"
 export TEMP="$TMPDIR"
 export TMP="$TMPDIR"
-export RAY_TMPDIR="${RAY_TMPDIR:-/tmp/rayhidtok4b_${run_id}_$$}"
+export RAY_TMPDIR="${RAY_TMPDIR:-/tmp/rayhidtok8b_${run_id}_$$}"
 export HF_HOME="${HF_HOME:-$HOME/.cache/huggingface}"
 export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$HF_HOME}"
 export PYTHONPATH="$repo_root:${PYTHONPATH:-}"
@@ -134,7 +134,7 @@ python3 -m verl.trainer.main_sod_oprd_bridge_backbone_cached \
     trainer.critic_warmup=0 \
     'trainer.logger=["console","wandb"]' \
     trainer.project_name=verl_agent_alfworld \
-    trainer.experiment_name=sod_oprd_bridge_hidden_tokenimp_alfworld_1p7b_to_4bgrpo_tp1_formal150 \
+    trainer.experiment_name=sod_oprd_bridge_hidden_tokenimp_alfworld_1p7b_to_8b_tp1_formal150 \
     trainer.n_gpus_per_node=8 \
     trainer.ray_wait_register_center_timeout=600 \
     trainer.nnodes=1 \
