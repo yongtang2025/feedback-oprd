@@ -40,3 +40,4 @@ environment.yml
 # wandb 实验日志
 wandb/
 *.wandb
+*.egg-info/
